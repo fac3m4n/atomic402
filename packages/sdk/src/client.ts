@@ -67,7 +67,7 @@ export class X402Client {
     keypair: Ed25519Keypair
   ): Promise<SignedTransactionRequest> {
     const txBytes = Buffer.from(transactionBytes, "base64");
-    const signature = await keypair.signTransaction(txBytes);
+    const { signature } = await keypair.signTransaction(txBytes);
 
     return {
       transactionBytes,
@@ -204,14 +204,14 @@ export class X402Client {
             obj.data?.content && obj.data.content.dataType === "moveObject"
         )
         .map((obj) => {
-          const fields = obj.data!.content!.fields as any;
+          const fields = obj.data!.content!.fields as Record<string, unknown>;
           return {
             id: obj.data!.objectId,
-            contentId: fields.content_id,
-            contentTitle: this.decodeString(fields.content_title),
-            pricePaid: fields.price_paid,
-            purchaser: fields.purchaser,
-            timestamp: fields.timestamp,
+            contentId: String(fields.content_id),
+            contentTitle: this.decodeString(fields.content_title as number[]),
+            pricePaid: String(fields.price_paid),
+            purchaser: String(fields.purchaser),
+            timestamp: String(fields.timestamp),
           };
         });
     } catch (error) {
