@@ -1,19 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Header } from "./components/Header";
 import { ContentCard } from "./components/ContentCard";
 import { useCurrentAccount, useSignTransaction } from "@mysten/dapp-kit";
 import type { ContentMetadata, X402Response } from "@repo/shared/types";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Card } from "./components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function Home() {
-  const [contents, setContents] = useState<ContentMetadata[]>([]);
-  const [ownedContent, setOwnedContent] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [txStatus, setTxStatus] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -22,48 +20,40 @@ export default function Home() {
   const account = useCurrentAccount();
   const { mutateAsync: signTransaction } = useSignTransaction();
 
-  // Fetch available content
-  useEffect(() => {
-    fetchContents();
-  }, []);
-
-  // Check owned content when wallet connects
-  useEffect(() => {
-    if (account?.address) {
-      checkOwnedContent();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account?.address]);
-
-  const fetchContents = async () => {
-    try {
+  // Fetch available content with TanStack Query
+  const { data: contentsData, isLoading: contentsLoading } = useQuery<
+    ContentMetadata[]
+  >({
+    queryKey: ["contents"],
+    queryFn: async () => {
       const response = await fetch(`${API_URL}/content`);
       const data = await response.json();
-      setContents(data.data || []);
-    } catch (error) {
-      console.error("Failed to fetch contents:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data || [];
+    },
+  });
 
-  const checkOwnedContent = async () => {
-    if (!account?.address) return;
+  // Check owned content when wallet connects with TanStack Query
+  const { data: ownedContentData, refetch: refetchOwnedContent } = useQuery<
+    string[]
+  >({
+    queryKey: ["ownedContent", account?.address],
+    queryFn: async () => {
+      if (!account?.address) return [];
 
-    try {
       const response = await fetch(`${API_URL}/receipts/${account.address}`);
       const data = await response.json();
 
       if (data.success) {
-        const owned = new Set<string>(
-          data.data.map((r: { contentId: string }) => r.contentId)
-        );
-        setOwnedContent(owned);
+        return data.data.map((r: { contentId: string }) => r.contentId);
       }
-    } catch (error) {
-      console.error("Failed to check owned content:", error);
-    }
-  };
+      return [];
+    },
+    enabled: !!account?.address,
+  });
+
+  const contents = contentsData || [];
+  const ownedContent = new Set<string>(ownedContentData || []);
+  const loading = contentsLoading;
 
   const handlePurchase = async (contentId: string) => {
     if (!account?.address) {
@@ -119,9 +109,9 @@ export default function Home() {
           type: "success",
         });
 
-        // Refresh owned content
+        // Refresh owned content using TanStack Query refetch
         setTimeout(() => {
-          checkOwnedContent();
+          refetchOwnedContent();
           setTxStatus(null);
         }, 3000);
       } else {
