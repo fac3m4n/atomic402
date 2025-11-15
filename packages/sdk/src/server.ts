@@ -51,8 +51,30 @@ export class X402Server {
   async buildPurchaseTransaction(params: PurchaseParams): Promise<Transaction> {
     const tx = new Transaction();
 
-    // 1. Split coin for exact payment
-    const [coin] = tx.splitCoins(tx.gas, [params.price]);
+    // Get buyer's SUI coins to use for payment (not gas coin!)
+    const coins = await this.client.getCoins({
+      owner: params.buyerAddress,
+      coinType: "0x2::sui::SUI",
+    });
+
+    if (!coins.data || coins.data.length === 0) {
+      throw new Error("Buyer has no SUI coins");
+    }
+
+    // Find a coin with enough balance or use the first coin
+    // (Sui will automatically merge if needed)
+    const paymentCoin =
+      coins.data.find((c) => BigInt(c.balance) >= BigInt(params.price)) ||
+      coins.data[0];
+
+    if (!paymentCoin) {
+      throw new Error("No valid payment coin found");
+    }
+
+    // 1. Split coin for exact payment from buyer's coin (NOT tx.gas)
+    const [coin] = tx.splitCoins(tx.object(paymentCoin.coinObjectId), [
+      params.price,
+    ]);
 
     // 2. Call purchase_and_grant_access function
     // This atomically:
@@ -70,7 +92,7 @@ export class X402Server {
     // Set sender (buyer)
     tx.setSender(params.buyerAddress);
 
-    // If we have a sponsor, set gas payment
+    // If we have a sponsor, set gas payment (sponsor pays ONLY gas, not content)
     if (this.sponsorKeypair) {
       tx.setGasOwner(this.sponsorKeypair.toSuiAddress());
     }
