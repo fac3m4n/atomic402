@@ -1,24 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { Header } from "./components/Header";
 import { ContentCard } from "./components/ContentCard";
 import { useCurrentAccount, useSignTransaction } from "@mysten/dapp-kit";
 import type { ContentMetadata, X402Response } from "@repo/shared/types";
-import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { Card } from "./components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ExternalLink } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const NETWORK = process.env.NEXT_PUBLIC_SUI_NETWORK || "testnet";
 
 export default function Home() {
-  const [txStatus, setTxStatus] = useState<{
-    message: string;
-    type: "success" | "error" | "info";
-  } | null>(null);
-
   const account = useCurrentAccount();
   const { mutateAsync: signTransaction } = useSignTransaction();
+  const queryClient = useQueryClient();
 
   // Fetch available content with TanStack Query
   const { data: contentsData, isLoading: contentsLoading } = useQuery<
@@ -33,9 +30,11 @@ export default function Home() {
   });
 
   // Check owned content when wallet connects with TanStack Query
-  const { data: ownedContentData, refetch: refetchOwnedContent } = useQuery<
-    string[]
-  >({
+  const {
+    data: ownedContentData,
+    isLoading: ownedContentLoading,
+    refetch: refetchOwnedContent,
+  } = useQuery<string[]>({
     queryKey: ["ownedContent", account?.address],
     queryFn: async () => {
       if (!account?.address) return [];
@@ -53,17 +52,20 @@ export default function Home() {
 
   const contents = contentsData || [];
   const ownedContent = new Set<string>(ownedContentData || []);
-  const loading = contentsLoading;
+
+  // Show loading state until both contents and owned content (if wallet connected) are loaded
+  const isLoadingData =
+    contentsLoading || (account?.address && ownedContentLoading);
 
   const handlePurchase = async (contentId: string) => {
     if (!account?.address) {
-      alert("Please connect your wallet first");
+      toast.error("Please connect your wallet first");
       return;
     }
 
-    try {
-      setTxStatus({ message: "Requesting payment details...", type: "info" });
+    const toastId = toast.loading("Requesting payment details...");
 
+    try {
       // Step 1: Request content (will get 402 response)
       const response = await fetch(
         `${API_URL}/content/${contentId}?address=${account.address}`
@@ -75,7 +77,7 @@ export default function Home() {
 
       const x402Response: X402Response = await response.json();
 
-      setTxStatus({ message: "Waiting for signature...", type: "info" });
+      toast.loading("Waiting for wallet signature...", { id: toastId });
 
       // Step 2: Sign the transaction
       // Pass the base64 string directly - the wallet will handle decoding
@@ -83,7 +85,7 @@ export default function Home() {
         transaction: x402Response.paymentRequired.transactionBytes,
       });
 
-      setTxStatus({ message: "Submitting transaction...", type: "info" });
+      toast.loading("Submitting transaction to blockchain...", { id: toastId });
 
       // Step 3: Submit signed transaction to server
       const executeResponse = await fetch(
@@ -104,27 +106,48 @@ export default function Home() {
       const result = await executeResponse.json();
 
       if (result.success) {
-        setTxStatus({
-          message: `Success! Transaction: ${result.data.digest.slice(0, 8)}...`,
-          type: "success",
-        });
+        const explorerUrl = `https://suiscan.xyz/${NETWORK}/tx/${result.data.digest}`;
 
-        // Refresh owned content using TanStack Query refetch
-        setTimeout(() => {
-          refetchOwnedContent();
-          setTxStatus(null);
-        }, 3000);
+        toast.success(
+          <div className="flex items-center gap-2">
+            <span>Purchase successful!</span>
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View on Explorer
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>,
+          { id: toastId, duration: 5000 }
+        );
+
+        // Optimistically update the cache immediately
+        queryClient.setQueryData<string[]>(
+          ["ownedContent", account.address],
+          (old) => {
+            const current = old || [];
+            return current.includes(contentId)
+              ? current
+              : [...current, contentId];
+          }
+        );
+
+        // Refetch after a short delay to ensure blockchain state is settled
+        setTimeout(async () => {
+          await refetchOwnedContent();
+        }, 1500);
       } else {
         throw new Error(result.error || "Transaction failed");
       }
     } catch (error) {
       console.error("Purchase error:", error);
-      setTxStatus({
-        message: `Error: ${error instanceof Error ? error.message : "Purchase failed"}`,
-        type: "error",
+      toast.error(error instanceof Error ? error.message : "Purchase failed", {
+        id: toastId,
       });
-
-      setTimeout(() => setTxStatus(null), 5000);
     }
   };
 
@@ -144,47 +167,11 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Transaction Status */}
-        {txStatus && (
-          <Card
-            className={`mb-6 p-4 ${
-              txStatus.type === "success"
-                ? "bg-green-50 border-green-200"
-                : txStatus.type === "error"
-                  ? "bg-red-50 border-red-200"
-                  : "bg-blue-50 border-blue-200"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {txStatus.type === "success" && (
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-              )}
-              {txStatus.type === "error" && (
-                <AlertCircle className="w-5 h-5 text-red-600" />
-              )}
-              {txStatus.type === "info" && (
-                <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-              )}
-              <span
-                className={`font-medium ${
-                  txStatus.type === "success"
-                    ? "text-green-900"
-                    : txStatus.type === "error"
-                      ? "text-red-900"
-                      : "text-blue-900"
-                }`}
-              >
-                {txStatus.message}
-              </span>
-            </div>
-          </Card>
-        )}
-
         {/* Content Grid */}
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-3 text-muted-foreground">
+        {isLoadingData ? (
+          <div className="flex flex-col justify-center items-center py-20">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+            <span className="text-lg text-muted-foreground font-medium">
               Loading content...
             </span>
           </div>
