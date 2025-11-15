@@ -1,0 +1,13 @@
+{
+  "network": "testnet",
+  "packageId": "0x5915db413f75114fd0193ab60a7b1a078b23939db16a29637f4e2fbab073ac25",
+  "contentRegistryId": "CREATED_ON_INIT",
+  "moduleNames": {
+    "contentAccess": "content_access"
+  },
+  "functions": {
+    "createContent": "create_content",
+    "purchaseAndGrantAccess": "purchase_and_grant_access"
+  },
+  "instructions": "After deploying the Move contract, update this file with the actual Package ID. The ContentRegistry is created automatically on init."
+}
