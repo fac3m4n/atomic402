@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "x402 on Sui - Payment Required Protocol",
+  title: "atomic402",
   description: "Demonstrating atomic payment + access grant on Sui blockchain",
 };
 

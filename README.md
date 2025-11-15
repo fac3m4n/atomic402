@@ -87,7 +87,7 @@ atomic402/
 
 - [Sui CLI](https://docs.sui.io/build/install)
 - [Bun](https://bun.sh/) or Node.js 18+
-- Sui wallet (Sui Wallet browser extension)
+- Sui wallet (Sui/Slush Wallet browser extension)
 
 ### 1. Install Dependencies
 
