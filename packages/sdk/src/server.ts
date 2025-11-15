@@ -117,7 +117,8 @@ export class X402Server {
   async sponsorAndExecute(
     transactionBytes: string,
     clientSignature: string,
-    clientPublicKey: string
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _clientPublicKey: string // Reserved for future verification
   ): Promise<TransactionResult> {
     if (!this.sponsorKeypair) {
       throw new Error("Sponsor keypair required for transaction execution");
@@ -171,7 +172,7 @@ export class X402Server {
       arguments: [
         tx.pure.string(title),
         tx.pure.string(description),
-        tx.pure.u64(price),
+        tx.pure.u64(BigInt(price)),
         tx.pure.string(contentUrl),
       ],
     });
@@ -217,15 +218,15 @@ export class X402Server {
         return null;
       }
 
-      const fields = obj.data.content.fields as any;
+      const fields = obj.data.content.fields as Record<string, unknown>;
 
       return {
         id: contentObjectId,
-        title: this.decodeString(fields.title),
-        description: this.decodeString(fields.description),
-        price: fields.price,
-        contentUrl: this.decodeString(fields.content_url),
-        creator: fields.creator,
+        title: this.decodeString(fields.title as number[]),
+        description: this.decodeString(fields.description as number[]),
+        price: String(fields.price),
+        contentUrl: this.decodeString(fields.content_url as number[]),
+        creator: String(fields.creator),
       };
     } catch (error) {
       console.error("Failed to fetch content:", error);
@@ -259,7 +260,7 @@ export class X402Server {
       // Check if any receipt matches the content ID
       return objects.data.some((obj) => {
         if (obj.data?.content && obj.data.content.dataType === "moveObject") {
-          const fields = obj.data.content.fields as any;
+          const fields = obj.data.content.fields as Record<string, unknown>;
           return fields.content_id === contentId;
         }
         return false;
