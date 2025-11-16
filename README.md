@@ -10,17 +10,15 @@ This project showcases how the HTTP 402 "Payment Required" protocol can be revol
 
 ### Traditional x402 Flow (Other Blockchains)
 
-```
-1. Client pays → 2. Submit TxID → 3. Server polls blockchain → 4. Wait for confirmation → 5. Verify payment → 6. Grant access
-```
+<img width="1484" height="562" alt="image" src="https://github.com/user-attachments/assets/4c47b18b-87d2-4c1f-ba11-44f9b15ff468" />
+
 
 **Problems**: Polling delay, verification complexity, potential re-org issues, trust gap
 
 ### x402 on Sui Flow
 
-```
-1. Server builds PTB (payment + access) → 2. Client signs → 3. Atomic execution → 4. Instant access
-```
+<img width="1414" height="552" alt="image" src="https://github.com/user-attachments/assets/fc0ac4fd-97d0-4d1e-9628-9dc96c5b254e" />
+
 
 **Benefits**: No polling, no verification delay, zero trust issues, atomic execution
 
